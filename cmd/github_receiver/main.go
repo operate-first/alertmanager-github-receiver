@@ -21,11 +21,10 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net/http"
-	"os"
-
 	"github.com/m-lab/go/httpx"
 	"github.com/m-lab/go/rtx"
+	"net/http"
+	"os"
 
 	"github.com/m-lab/alertmanager-github-receiver/alerts"
 	"github.com/m-lab/alertmanager-github-receiver/issues"
@@ -35,6 +34,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -46,6 +46,7 @@ var (
 	githubUploadURL = flag.String("enterprise.upload-url", "", "The upload URL needs to be set if it differs from the Github Enterprise base URL.")
 	enableAutoClose = flag.Bool("enable-auto-close", false, "Once an alert stops firing, automatically close open issues.")
 	labelOnResolved = flag.String("label-on-resolved", "", "Once an alert stops firing, apply this label.")
+	labelsTmplFile	= flagx.File{}
 	enableInMemory  = flag.Bool("enable-inmemory", false, "Perform all operations in memory, without using github API.")
 	receiverAddr    = flag.String("webhook.listen-address", ":9393", "Listen on address for new alertmanager webhook messages.")
 	alertLabel      = flag.String("alertlabel", "alert:boom:", "The default label applied to all alerts. Also used to search the repo to discover exisitng alerts.")
@@ -69,6 +70,14 @@ var (
 	osExit         = os.Exit
 )
 
+type labelsConfig struct {
+	Labels			[]TmplList 			`yaml:"labels,omitempty"`
+}
+type TmplList struct {
+	Description 	string				`yaml:"description,omitempty"`
+	Template	 	string				`yaml:"template,omitempty"`
+}
+
 const (
 	usage = `
 NAME
@@ -89,6 +98,7 @@ func init() {
 	flag.Var(&extraLabels, "label", "Extra labels to add to issues at creation time.")
 	flag.Var(&authtokenFile, "authtoken-file", "Oauth2 token file for access to github API. When provided it takes precedence over authtoken.")
 	flag.Var(&titleTmplFile, "title-template-file", "File containing a template to generate issue titles.")
+	flag.Var(&labelsTmplFile, "label-template-file", "File containing a template to generate issue labels based on github labels.")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), usage)
 		flag.PrintDefaults()
@@ -123,6 +133,20 @@ func main() {
 		token = *authtoken
 	}
 
+	var labelTmplList []string
+	if len(labelsTmplFile.Bytes) != 0 {
+		var t labelsConfig
+		err := yaml.Unmarshal(labelsTmplFile.Bytes, &t)
+		if err != nil {
+			fmt.Print(err)
+			osExit(1)
+			return
+		}
+		for _, ghLabel := range t.Labels {
+			labelTmplList = append(labelTmplList, ghLabel.Template)
+		}
+	}
+
 	var client alerts.ReceiverClient
 	if *enableInMemory {
 		client = local.NewClient()
@@ -141,7 +165,7 @@ func main() {
 	promSrv := prometheusx.MustServeMetrics()
 	defer promSrv.Close()
 
-	receiver, err := alerts.NewReceiver(client, *githubRepo, *enableAutoClose, *labelOnResolved, extraLabels, string(titleTmplFile))
+	receiver, err := alerts.NewReceiver(client, *githubRepo, *enableAutoClose, *labelOnResolved, extraLabels, string(titleTmplFile), labelTmplList)
 	if err != nil {
 		fmt.Print(err)
 		osExit(1)

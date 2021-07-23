@@ -77,12 +77,16 @@ type ReceiverHandler struct {
 	// ExtraLabels values will be added to new issues as additional labels.
 	ExtraLabels []string
 
+	// Labels template that convert alert labels to github labels.
+	labelsTmpl []*template.Template
+
 	// titleTmpl is used to format the title of the new issue.
 	titleTmpl *template.Template
 }
 
 // NewReceiver creates a new ReceiverHandler.
-func NewReceiver(client ReceiverClient, githubRepo string, autoClose bool, resolvedLabel string, extraLabels []string, titleTmplStr string) (*ReceiverHandler, error) {
+func NewReceiver(client ReceiverClient, githubRepo string, autoClose bool, resolvedLabel string, extraLabels []string,
+	titleTmplStr string, labelTmplList []string) (*ReceiverHandler, error) {
 	rh := ReceiverHandler{
 		Client:        client,
 		DefaultRepo:   githubRepo,
@@ -95,6 +99,17 @@ func NewReceiver(client ReceiverClient, githubRepo string, autoClose bool, resol
 	rh.titleTmpl, err = template.New("title").Parse(titleTmplStr)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(labelTmplList) > 0 {
+		rh.labelsTmpl = make([]*template.Template, 0)
+		for _, s := range labelTmplList {
+			var t, err = template.New("label").Parse(s)
+			if err != nil {
+				return nil, err
+			}
+			rh.labelsTmpl = append(rh.labelsTmpl, t)
+		}
 	}
 
 	return &rh, nil
@@ -172,6 +187,15 @@ func (rh *ReceiverHandler) processAlert(msg *webhook.Message) error {
 	if msg.Data.Status == "firing" {
 		if foundIssue == nil {
 			msgBody := formatIssueBody(msg)
+
+			// add alert labels as gh labels
+			msgLabels, err := rh.formatLabels(msg)
+			if err != nil {
+				return fmt.Errorf("format labels for %q: %s", msg.GroupKey, err)
+			}
+
+			rh.ExtraLabels = append(rh.ExtraLabels, msgLabels...)
+			log.Printf("Creating issue: %s\n", msgTitle)
 			_, err = rh.Client.CreateIssue(rh.getTargetRepo(msg), msgTitle, msgBody, rh.ExtraLabels)
 			if err == nil {
 				createdIssues.WithLabelValues(alertName).Inc()

@@ -18,10 +18,10 @@ package alerts
 import (
 	"bytes"
 	"fmt"
+	"github.com/prometheus/alertmanager/notify/webhook"
 	"html/template"
 	"log"
-
-	"github.com/prometheus/alertmanager/notify/webhook"
+	"strings"
 )
 
 const (
@@ -104,4 +104,23 @@ func formatIssueBody(msg *webhook.Message) string {
 	}
 	s := buf.String()
 	return fmt.Sprintf("<!-- ID: %s -->\n%s", id(msg), s)
+}
+
+// formatIssueBody constructs a github labels from a webhook message.
+func (rh *ReceiverHandler) formatLabels(msg *webhook.Message) ([]string, error) {
+	var labelBuff bytes.Buffer
+	var ghLabels = make([]string, 0)
+
+	for _, alert := range msg.Data.Alerts {
+		for _, l := range rh.labelsTmpl {
+			if err := l.Execute(&labelBuff, alert); err != nil {
+				return []string{}, err
+			}
+			ghlabel := labelBuff.String()
+			ghlabel = strings.TrimSpace(ghlabel)
+			ghLabels = append(ghLabels, ghlabel)
+			labelBuff.Reset()
+		}
+	}
+	return ghLabels, nil
 }
