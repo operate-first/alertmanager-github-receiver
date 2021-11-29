@@ -45,6 +45,33 @@ docker run -it -p 9393:9393 measurementlab/alertmanager-github-receiver:latest
 
 Note: both the org and repo must already exist.
 
+## Start GitHub Receiver with Github Specific Labels (Not Default Alert Labels)
+
+In addition to the basic alertmanager alerts, our workflow uses a labelmap configuration file, which converts the alertmanger alerts to github alerts so that they can be tagged on github. This functions similarly to the regular reciever, the only difference is that we need to mount the label map to the docker container, and specify docker to use that as an argument to the entrypoint. An example of how one would start the reciever with labelmap configured:
+```
+docker run -it --mount type=bind,source="$(pwd)/labelmap",target=/home/alertmanager-github-reciever-config/,readonly -p 9393:9393 grepere/humair-add-labels -authtoken=$(GITHUB_AUTH_TOKEN) -org=<org> -repo=<repo>
+```
+
+Note: Above is an example of binding the labelmap directory in the root of this source on your computer to the /home/alertmanager-github-reciever-config directory of the docker container. Also a specific image is used to add support for the labelmap file. Once this change returns to upstream it will go back to using the official image: measurementlab/alertmanager-github-receiver:latest
+
+## Sample Labelmap Configuration File
+
+This labelmap configuration example file checks for the label key of severity and namespace, so that it can use their values to tag the alert.
+
+```
+labels:
+  - description: label for catching severity
+    template: |
+      {{if .Labels.severity}}
+      severity/{{.Labels.severity}}
+      {{- end}}
+  - description: label for namespaces
+    template: |
+      {{if .Labels.namespace}}
+      namespace/{{.Labels.namespace}}
+      {{- end}}
+```
+
 ## Configure Alertmanager Webhook Plugin
 
 The Prometheus Alertmanager supports third-party notification mechanisms
@@ -118,3 +145,11 @@ If the alert includes a `repo` label, issues will be created in that repository,
 under the GitHub organization specified by `-org`. If no `repo` label is
 present, issues will be created in the repository specified by the `-repo`
 option.
+
+## Additional configuration for converting alert labels to GitHub labels
+
+To add the label map file mentioned [here](https://github.com/operate-first/alertmanager-github-receiver/blob/master/Dockerfile#L20) just you can use the -label-template-file. For example:
+
+```
+ENTRYPOINT ["/github_receiver", "-label-template-file=/home/alertmanager-github-reciever-config/labelmap.yaml"]
+```

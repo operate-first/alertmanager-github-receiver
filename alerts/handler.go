@@ -80,6 +80,8 @@ type ReceiverHandler struct {
 	// Labels template that convert alert labels to github labels.
 	labelsTmpl []*template.Template
 
+	LabelsTmplList []string
+
 	// titleTmpl is used to format the title of the new issue.
 	titleTmpl *template.Template
 }
@@ -88,11 +90,12 @@ type ReceiverHandler struct {
 func NewReceiver(client ReceiverClient, githubRepo string, autoClose bool, resolvedLabel string, extraLabels []string,
 	titleTmplStr string, labelTmplList []string) (*ReceiverHandler, error) {
 	rh := ReceiverHandler{
-		Client:        client,
-		DefaultRepo:   githubRepo,
-		AutoClose:     autoClose,
-		ResolvedLabel: resolvedLabel,
-		ExtraLabels:   extraLabels,
+		Client:        	client,
+		DefaultRepo:   	githubRepo,
+		AutoClose:     	autoClose,
+		ResolvedLabel: 	resolvedLabel,
+		ExtraLabels:   	extraLabels,
+		LabelsTmplList: labelTmplList,
 	}
 
 	var err error
@@ -111,7 +114,6 @@ func NewReceiver(client ReceiverClient, githubRepo string, autoClose bool, resol
 			rh.labelsTmpl = append(rh.labelsTmpl, t)
 		}
 	}
-
 	return &rh, nil
 }
 
@@ -193,7 +195,7 @@ func (rh *ReceiverHandler) processAlert(msg *webhook.Message) error {
 			if err != nil {
 				return fmt.Errorf("format labels for %q: %s", msg.GroupKey, err)
 			}
-
+			fmt.Println("message labels: ", msgLabels)
 			rh.ExtraLabels = append(rh.ExtraLabels, msgLabels...)
 			log.Printf("Creating issue: %s\n", msgTitle)
 			_, err = rh.Client.CreateIssue(rh.getTargetRepo(msg), msgTitle, msgBody, rh.ExtraLabels)

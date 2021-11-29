@@ -274,6 +274,7 @@ func TestReceiverHandler_ServeHTTP(t *testing.T) {
 				// Override the reader to return an error on read.
 				msgReader = &errorReader{}
 			}
+			labelsTmplList := make([]string, 0)
 
 			// Create a response recorder.
 			rw := httptest.NewRecorder()
@@ -288,7 +289,7 @@ func TestReceiverHandler_ServeHTTP(t *testing.T) {
 			if titleTmpl == "" {
 				titleTmpl = DefaultTitleTmpl
 			}
-			rh, err := NewReceiver(tt.fakeClient, "default", true, "", nil, titleTmpl)
+			rh, err := NewReceiver(tt.fakeClient, "default", true, "", nil, titleTmpl, labelsTmplList)
 			if tt.expectReceiverErr {
 				if err == nil {
 					t.Fatal()

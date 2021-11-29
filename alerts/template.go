@@ -109,18 +109,58 @@ func formatIssueBody(msg *webhook.Message) string {
 // formatIssueBody constructs a github labels from a webhook message.
 func (rh *ReceiverHandler) formatLabels(msg *webhook.Message) ([]string, error) {
 	var labelBuff bytes.Buffer
-	var ghLabels = make([]string, 0)
-
-	for _, alert := range msg.Data.Alerts {
-		for _, l := range rh.labelsTmpl {
-			if err := l.Execute(&labelBuff, alert); err != nil {
+	var ghLabels []string
+	var contextCheck string
+	var labelTemplate bool
+	if len(rh.labelsTmpl) == 1 && rh.LabelsTmplList[0][0:2] == "{{" { // if length is 1 for labels and checking for template characters
+		labelTemplate = true
+	} else {
+		labelTemplate = false
+	}
+	for index, label := range rh.labelsTmpl { 
+		stringLabel := rh.LabelsTmplList[index]
+		propertyDepth := len(strings.Split(rh.LabelsTmplList[index], "."))-1
+		if propertyDepth > 1 {
+			firstPropertyIndex := strings.Index(stringLabel, ".")
+			secondPropertyIndex := strings.Index(stringLabel[firstPropertyIndex+1:], ".") + firstPropertyIndex + 1
+			firstCloseIndex := strings.Index(stringLabel, "}")
+			if secondPropertyIndex < firstCloseIndex {
+				contextCheck = stringLabel[firstPropertyIndex:secondPropertyIndex]
+			} else {
+				contextCheck = stringLabel[firstPropertyIndex:firstCloseIndex]
+			}
+		} else if propertyDepth == 1 { 
+			firstPropertyIndex := strings.Index(stringLabel, ".")
+			contextCheck = stringLabel[firstPropertyIndex:strings.Index(stringLabel, "}")]
+		} else {
+			contextCheck = rh.LabelsTmplList[index]
+		}
+		contextCheck = strings.TrimSpace(contextCheck)
+		
+		if contextCheck == ".Data" {
+			if err := label.Execute(&labelBuff, &msg); err != nil {
 				return []string{}, err
 			}
-			ghlabel := labelBuff.String()
-			ghlabel = strings.TrimSpace(ghlabel)
-			ghLabels = append(ghLabels, ghlabel)
-			labelBuff.Reset()
+		} else if contextCheck == ".Alerts" || contextCheck == ".Status" {
+			if err := label.Execute(&labelBuff, &msg.Data); err != nil {
+				return []string{}, err
+			}
+		} else if contextCheck == ".Labels" || contextCheck == ".Annotations"  {
+			if err := label.Execute(&labelBuff, &msg.Data.Alerts[0]); err != nil {
+				return []string{}, err
+			} 	
+		} else {
+			return []string{}, fmt.Errorf("no valid context to use for label.execute. Value does not exist.")
 		}
+		ghlabel := labelBuff.String()
+		ghlabel = strings.TrimSpace(ghlabel)
+		if ghlabel != "" {
+			ghLabels = append(ghLabels, ghlabel)
+		}
+		labelBuff.Reset()
+	}
+	if labelTemplate == true {
+		ghLabels = strings.Split(ghLabels[0], " ")
 	}
 	return ghLabels, nil
 }
