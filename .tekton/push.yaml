@@ -1,11 +1,10 @@
----
 apiVersion: tekton.dev/v1beta1
 kind: PipelineRun
 metadata:
   name: publish-container-image
   annotations:
-    pipelinesascode.tekton.dev/on-event: "[push]"
-    pipelinesascode.tekton.dev/on-target-branch: "[main]"
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      event == "push" && target_branch == "refs/tags/v.*"
     pipelinesascode.tekton.dev/task: "[git-clone, buildah]"
     pipelinesascode.tekton.dev/max-keep-runs: "5"
 spec:
@@ -50,7 +49,7 @@ spec:
           - name: IMAGE
             value: image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/alertmanager-github-receiver:$(params.revision)
           - name: BUILDER_IMAGE
-            value: quay.io/buildah/stable:v1.31.0
+            value: quay.io/buildah/stable:v1.32.0
         workspaces:
           - name: source
             workspace: source
@@ -64,7 +63,7 @@ spec:
           # - e2e-tests
         params:
           - name: srcImageURL
-            value: docker://image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/paddock:$(params.revision)
+            value: docker://image-registry.openshift-image-registry.svc:5000/$(context.pipelineRun.namespace)/alertmanager-github-receiver:$(params.revision)
           - name: destImageURL
             value: docker://quay.io/b4mad/alertmanager-github-receiver:$(params.revision)
           - name: srcTLSverify
