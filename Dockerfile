@@ -1,4 +1,4 @@
-FROM golang:1.20 as builder
+FROM docker.io/golang:1.20 as builder
 
 WORKDIR /go/src/github.com/m-lab/alertmanager-github-receiver
 ADD go.mod go.sum ./
