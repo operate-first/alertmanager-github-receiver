@@ -1,7 +1,7 @@
 apiVersion: tekton.dev/v1beta1
 kind: PipelineRun
 metadata:
-  name: publish-container-image
+  name: on-tag-release
   annotations:
     pipelinesascode.tekton.dev/on-cel-expression: |
       event == "push" && target_branch == "refs/tags/v.*"
