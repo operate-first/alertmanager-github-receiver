@@ -1,0 +1,8 @@
+apiVersion: pipelinesascode.tekton.dev/v1alpha1
+kind: Repository
+metadata:
+  creationTimestamp: null
+  name: github-com-op1st-alertmanager-github-receiver
+  namespace: op1st-pipelines
+spec:
+  url: https://github.com/operate-first/alertmanager-github-receiver.git
